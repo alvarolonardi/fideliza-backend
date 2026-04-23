@@ -1,4 +1,4 @@
-// routes/dashboard.js — compatible con SQLite
+// routes/dashboard.js — compatible con PostgreSQL
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../../config/db');
@@ -18,7 +18,7 @@ router.get('/', auth, async (req, res) => {
           COUNT(*) as total_clientes,
           SUM(CASE WHEN segmento != 'inactivo' THEN 1 ELSE 0 END) as activos,
           SUM(CASE WHEN segmento = 'inactivo'  THEN 1 ELSE 0 END) as inactivos,
-          SUM(CASE WHEN es_vip = 1             THEN 1 ELSE 0 END) as vip,
+          SUM(CASE WHEN es_vip = true          THEN 1 ELSE 0 END) as vip,
           COALESCE(SUM(total_gastado), 0)  as ventas_totales,
           COALESCE(AVG(CASE WHEN total_gastado > 0 THEN total_gastado END), 0) as ticket_promedio
         FROM clientes
@@ -36,7 +36,7 @@ router.get('/', auth, async (req, res) => {
           SUM(CASE WHEN estado='enviado'  THEN 1 ELSE 0 END) as enviados,
           SUM(CASE WHEN estado='simulado' THEN 1 ELSE 0 END) as simulados
         FROM mensajes_whatsapp
-        WHERE creado_en > datetime('now', '-1 day')
+        WHERE creado_en > NOW() - INTERVAL '1 day'
       `),
     ]);
 
