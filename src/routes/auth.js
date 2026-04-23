@@ -28,4 +28,23 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// RUTA TEMPORAL - crear admin inicial
+router.post('/setup', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) as total FROM admins');
+    const total = parseInt(rows[0].total || rows[0].count || 0);
+    if (total > 0) {
+      return res.status(400).json({ error: 'Ya existe un admin. Ruta deshabilitada.' });
+    }
+    const hash = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      'INSERT INTO admins (nombre, email, password_hash, rol) VALUES ($1, $2, $3, $4)',
+      ['Administrador', 'admin@fideliza.com', hash, 'admin']
+    );
+    res.json({ ok: true, mensaje: 'Admin creado: admin@fideliza.com / admin123' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
