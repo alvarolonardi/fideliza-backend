@@ -18,13 +18,13 @@ async function triggerCrossSell3Dias() {
     SELECT DISTINCT c.id, c.nombre, c.telefono, c.local
     FROM clientes c
     JOIN compras cp ON cp.cliente_id = c.id
-    WHERE cp.creado_en BETWEEN datetime('now', '-3 days', '-2 hours')
-                            AND datetime('now', '-2 days', '+2 hours')
+    WHERE cp.creado_en BETWEEN NOW() - INTERVAL '3 days' - INTERVAL '2 hours'
+                            AND NOW() - INTERVAL '2 days' + INTERVAL '2 hours'
       AND NOT EXISTS (
         SELECT 1 FROM mensajes_whatsapp m
         WHERE m.cliente_id = c.id
           AND m.tipo = 'cross_sell'
-          AND m.creado_en > datetime('now', '-4 days')
+          AND m.creado_en > NOW() - INTERVAL '4 days'
       )
   `);
   console.log(`[Automación] Cross-sell 3 días: ${rows.length} clientes`);
@@ -38,14 +38,14 @@ async function triggerReactivacion() {
   const { rows } = await pool.query(`
     SELECT c.id, c.nombre, c.telefono, c.local
     FROM clientes c
-    WHERE (c.ultima_compra < datetime('now', '-25 days')
-           OR (c.ultima_compra IS NULL AND c.creado_en < datetime('now', '-25 days')))
+    WHERE (c.ultima_compra < NOW() - INTERVAL '25 days'
+           OR (c.ultima_compra IS NULL AND c.creado_en < NOW() - INTERVAL '25 days'))
       AND c.segmento = 'inactivo'
       AND NOT EXISTS (
         SELECT 1 FROM mensajes_whatsapp m
         WHERE m.cliente_id = c.id
           AND m.tipo = 'reactivacion'
-          AND m.creado_en > datetime('now', '-30 days')
+          AND m.creado_en > NOW() - INTERVAL '30 days'
       )
   `);
   console.log(`[Automación] Reactivación: ${rows.length} clientes`);
@@ -56,17 +56,16 @@ async function triggerReactivacion() {
 
 // ─── Trigger: Cumpleaños del día ─────────────────────────────
 async function triggerCumpleanos() {
-  // Buscar clientes que cumplen años hoy (comparando mes y día)
   const { rows } = await pool.query(`
     SELECT c.id, c.nombre, c.telefono, c.local, c.fecha_nacimiento
     FROM clientes c
     WHERE c.fecha_nacimiento IS NOT NULL
-      AND strftime('%m-%d', c.fecha_nacimiento) = strftime('%m-%d', 'now')
+      AND TO_CHAR(c.fecha_nacimiento::date, 'MM-DD') = TO_CHAR(NOW(), 'MM-DD')
       AND NOT EXISTS (
         SELECT 1 FROM mensajes_whatsapp m
         WHERE m.cliente_id = c.id
           AND m.tipo = 'cumpleanos'
-          AND m.creado_en > datetime('now', '-1 day')
+          AND m.creado_en > NOW() - INTERVAL '1 day'
       )
   `);
 
