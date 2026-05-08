@@ -1,11 +1,13 @@
 /**
  * Servicio WhatsApp — Casa Sierra
  * WHATSAPP_MOCK=true  → simula envío (logs en consola)
- * WHATSAPP_MOCK=false → envía real por Twilio
+ * WHATSAPP_MOCK=false → envía real por Meta Cloud API
  *
- * Cada local tiene su propio número de Twilio:
- *   TWILIO_WHATSAPP_FROM_MUJER  → número del local Mujer
- *   TWILIO_WHATSAPP_FROM_HOMBRE → número del local Hombre
+ * Variables de entorno necesarias en Railway:
+ *   WHATSAPP_MOCK=false
+ *   META_ACCESS_TOKEN=tu_token_permanente
+ *   META_PHONE_NUMBER_ID=1180889151765006
+ *   META_WHATSAPP_BUSINESS_ID=1144482394423445
  *
  * El número del cliente se normaliza automáticamente al formato +549XXXXXXXXXX
  */
@@ -22,19 +24,6 @@ function normalizarTelefono(tel) {
     return '+54' + '9' + num.slice(2);
   }
   return '+549' + num;
-}
-
-// ─── Seleccionar número de origen según local ────────────────
-function obtenerNumeroOrigen(local) {
-  if (local === 'hombre') {
-    return process.env.TWILIO_WHATSAPP_FROM_HOMBRE
-        || process.env.TWILIO_WHATSAPP_FROM
-        || 'whatsapp:+14155238886';
-  }
-  // mujer (default)
-  return process.env.TWILIO_WHATSAPP_FROM_MUJER
-      || process.env.TWILIO_WHATSAPP_FROM
-      || 'whatsapp:+14155238886';
 }
 
 // ─── Plantillas de mensajes ──────────────────────────────────
@@ -71,12 +60,54 @@ const TEMPLATES = {
     `¡Feliz cumpleaños ${nombre}! 🎂🎉 Toda la familia de Casa Sierra te desea un día increíble. Como regalo especial, tenés un descuento esperándote en el local. ¡Vení a celebrar con nosotros! 🎁`,
 };
 
+// ─── Envío real por Meta Cloud API ──────────────────────────
+async function enviarPorMeta(telefonoNorm, mensaje) {
+  const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  const accessToken   = process.env.META_ACCESS_TOKEN;
+
+  if (!phoneNumberId || !accessToken) {
+    throw new Error('Faltan variables META_PHONE_NUMBER_ID o META_ACCESS_TOKEN en Railway');
+  }
+
+  // Quitar el "+" para Meta (espera formato internacional sin +)
+  const telefonoMeta = telefonoNorm.replace('+', '');
+
+  const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+
+  const body = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: telefonoMeta,
+    type: 'text',
+    text: { body: mensaje },
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`Meta API error: ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
 // ─── Función principal de envío ──────────────────────────────
 async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'mujer', extra = {} }) {
   const mock = process.env.WHATSAPP_MOCK !== 'false';
   const telefonoNorm = normalizarTelefono(telefono);
 
-  // Usar plantilla específica de local si existe, sino la genérica
+  // Construir mensaje
   let mensaje;
   if (extra.mensajePersonalizado) {
     mensaje = extra.mensajePersonalizado;
@@ -87,44 +118,35 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
     } else if (TEMPLATES[tipo]) {
       mensaje = TEMPLATES[tipo](nombre, extra.puntos, extra.nivel);
     } else {
-      mensaje = TEMPLATES['bienvenida'](nombre, extra.puntos, extra.nivel);(`Tipo de mensaje desconocido: ${tipo}`);
+      mensaje = TEMPLATES['bienvenida'](nombre, extra.puntos, extra.nivel);
     }
   }
 
-  const from = obtenerNumeroOrigen(local);
   let estado = 'simulado';
-  let twilioSid = null;
+  let metaMessageId = null;
 
   if (!mock) {
     try {
-      const twilio = require('twilio')(
-        process.env.TWILIO_ACCOUNT_SID,
-        process.env.TWILIO_AUTH_TOKEN
-      );
-      const response = await twilio.messages.create({
-        body: mensaje,
-        from: from,
-        to: `whatsapp:${telefonoNorm}`,
-      });
-      twilioSid = response.sid;
+      const data = await enviarPorMeta(telefonoNorm, mensaje);
+      metaMessageId = data?.messages?.[0]?.id || null;
       estado = 'enviado';
-      console.log(`[WhatsApp REAL][${local}] → ${telefonoNorm} | ${tipo} | SID: ${twilioSid}`);
+      console.log(`[WhatsApp META][${local}] → ${telefonoNorm} | ${tipo} | ID: ${metaMessageId}`);
     } catch (err) {
       estado = 'fallido';
-      console.error(`[WhatsApp ERROR][${local}] → ${telefonoNorm}:`, err.message);
+      console.error(`[WhatsApp META ERROR][${local}] → ${telefonoNorm}:`, err.message);
     }
   } else {
     console.log(`[WhatsApp MOCK][local: ${local}] → ${telefonoNorm}`);
-    console.log(`  Desde: ${from}`);
     console.log(`  Tipo:  ${tipo}`);
     console.log(`  Msg:   ${mensaje}`);
   }
 
+  // Guardar log en base de datos
   try {
     await pool.query(
       `INSERT INTO mensajes_whatsapp (cliente_id, telefono, tipo, mensaje, estado, twilio_sid, local_origen)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [clienteId || null, telefonoNorm, tipo, mensaje, estado, twilioSid, local]
+      [clienteId || null, telefonoNorm, tipo, mensaje, estado, metaMessageId, local]
     );
   } catch (dbErr) {
     console.error('[WhatsApp] Error al guardar log:', dbErr.message);
@@ -145,7 +167,7 @@ async function enviarCampana({ campanaId, nombre, mensaje, segmento, local = 'to
   else if (segmento !== 'todos')     { where.push(`segmento = $${idx}`); params.push(segmento); idx++; }
 
   // Filtro por local
-  if (local === 'mujer')   { where.push(`local = $${idx}`); params.push('mujer'); idx++; }
+  if (local === 'mujer')       { where.push(`local = $${idx}`); params.push('mujer'); idx++; }
   else if (local === 'hombre') { where.push(`local = $${idx}`); params.push('hombre'); idx++; }
   // 'todos' → no agrega filtro
 
@@ -170,7 +192,7 @@ async function enviarCampana({ campanaId, nombre, mensaje, segmento, local = 'to
 
   if (campanaId) {
     await pool.query(
-      `UPDATE campanas SET estado='enviada', total_enviados=$1, enviado_en=datetime('now') WHERE id=$2`,
+      `UPDATE campanas SET estado='enviada', total_enviados=$1, enviado_en=NOW() WHERE id=$2`,
       [enviados, campanaId]
     );
   }
