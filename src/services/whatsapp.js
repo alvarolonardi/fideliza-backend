@@ -1,7 +1,7 @@
 /**
  * Servicio WhatsApp — Casa Sierra
  * WHATSAPP_MOCK=true  → simula envío (logs en consola)
- * WHATSAPP_MOCK=false → envía real por Meta Cloud API
+ * WHATSAPP_MOCK=false → envía real por Meta Cloud API usando plantillas aprobadas
  *
  * Variables de entorno necesarias en Railway:
  *   WHATSAPP_MOCK=false
@@ -26,42 +26,8 @@ function normalizarTelefono(tel) {
   return '+549' + num;
 }
 
-// ─── Plantillas de mensajes ──────────────────────────────────
-const TEMPLATES = {
-  post_compra: (nombre) =>
-    `Hola ${nombre} 💖 ¡Gracias por tu compra en Casa Sierra! Te va a encantar cómo te queda. Cualquier consulta estamos acá. ✨`,
-
-  cross_sell: (nombre) =>
-    `Hola ${nombre} 👀 Te guardé algo que combina perfecto con lo que llevaste. ¿Querés que te lo muestre? Escribinos y te cuento.`,
-
-  reactivacion: (nombre) =>
-    `Hola ${nombre} 🌟 Hace tiempo que no venís por acá... ¡Te queremos mostrar lo nuevo! Tenemos piezas que creo que te van a enamorar. ¿Pasás a verlas?`,
-
-  vip: (nombre) =>
-    `${nombre}, tenés acceso anticipado a nuestra nueva colección ✨ Solo para clientes VIP como vos. ¿Querés verla antes que nadie?`,
-
-  bienvenida_mujer: (nombre) =>
-    `¡Bienvenida ${nombre}! 🎉 Ya sos parte de la comunidad Casa Sierra Mujer. A partir de ahora vas a recibir novedades, preventas y beneficios exclusivos. ¡Gracias por elegirnos! 💛`,
-
-  bienvenida_hombre: (nombre) =>
-    `¡Hola ${nombre}! 🎉 Ya sos parte de la comunidad Casa Sierra. A partir de ahora vas a recibir novedades, preventas y beneficios exclusivos. ¡Gracias por elegirnos! 💪`,
-
-  // alias genérico (por compatibilidad con código existente)
-  bienvenida: (nombre) =>
-    `¡Bienvenida ${nombre}! 🎉 Ya sos parte de la comunidad Casa Sierra. A partir de ahora vas a recibir beneficios exclusivos, preventas y mucho más. ¡Gracias por elegirnos! 💛`,
-
-  puntos: (nombre, puntos, nivel) =>
-    `Hola ${nombre} ⭐ Ya tenés ${puntos} puntos acumulados. Nivel: ${nivel ? nivel.toUpperCase() : 'BRONCE'}. ¡Seguí comprando para subir y desbloquear más beneficios!`,
-
-  personal_shopper: (nombre) =>
-    `Hola ${nombre} 👗 Tu personal shopper está disponible. Contanos tu ocasión, talle y estilo, y te armamos un look a medida. ¡Es gratis para nuestros clientes!`,
-
-  cumpleanos: (nombre) =>
-    `¡Feliz cumpleaños ${nombre}! 🎂🎉 Toda la familia de Casa Sierra te desea un día increíble. Como regalo especial, tenés un descuento esperándote en el local. ¡Vení a celebrar con nosotros! 🎁`,
-};
-
-// ─── Envío real por Meta Cloud API ──────────────────────────
-async function enviarPorMeta(telefonoNorm, mensaje) {
+// ─── Envío real por Meta Cloud API usando plantillas ─────────
+async function enviarPorMetaTemplate(telefonoNorm, templateName, components) {
   const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
   const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
@@ -80,8 +46,12 @@ async function enviarPorMeta(telefonoNorm, mensaje) {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: telefonoMeta,
-    type: 'text',
-    text: { body: mensaje },
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: 'es_AR' },
+      components: components || [],
+    },
   };
 
   const response = await fetch(url, {
@@ -107,19 +77,75 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
   const mock = process.env.WHATSAPP_MOCK !== 'false';
   const telefonoNorm = normalizarTelefono(telefono);
 
-  // Construir mensaje
-  let mensaje;
-  if (extra.mensajePersonalizado) {
-    mensaje = extra.mensajePersonalizado;
+  // Determinar qué plantilla usar y sus parámetros
+  let templateName;
+  let components;
+  let mensajeLog; // solo para el log en base de datos
+
+  if (tipo === 'bienvenida' || tipo === 'bienvenida_mujer' || tipo === 'bienvenida_hombre') {
+    // Plantilla: bienvenida_cliente → variable {{1}} = nombre
+    templateName = 'bienvenida_cliente';
+    components = [
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: nombre }],
+      },
+    ];
+    mensajeLog = `[plantilla: bienvenida_cliente] nombre=${nombre}`;
+
+  } else if (tipo === 'cumpleanos') {
+    // Plantilla: cumpleanos_cliente → variable {{1}} = nombre
+    templateName = 'cumpleanos_cliente';
+    components = [
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: nombre }],
+      },
+    ];
+    mensajeLog = `[plantilla: cumpleanos_cliente] nombre=${nombre}`;
+
+  } else if (tipo === 'puntos') {
+    // Plantilla: puntos_cliente → {{1}}=nombre, {{2}}=puntos nuevos, {{3}}=total
+    const puntosNuevos = String(extra.puntosNuevos || extra.puntos || '0');
+    const puntosTotal  = String(extra.puntos || '0');
+    templateName = 'puntos_cliente';
+    components = [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: nombre },
+          { type: 'text', text: puntosNuevos },
+          { type: 'text', text: puntosTotal },
+        ],
+      },
+    ];
+    mensajeLog = `[plantilla: puntos_cliente] nombre=${nombre} puntosNuevos=${puntosNuevos} total=${puntosTotal}`;
+
+  } else if (tipo === 'campaña' || tipo === 'campana') {
+    // Plantilla: campana_cliente → {{1}}=nombre, {{2}}=mensaje de campaña
+    const mensajeCampana = extra.mensajePersonalizado || '';
+    templateName = 'campana_cliente';
+    components = [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: nombre },
+          { type: 'text', text: mensajeCampana },
+        ],
+      },
+    ];
+    mensajeLog = `[plantilla: campana_cliente] nombre=${nombre} mensaje=${mensajeCampana}`;
+
   } else {
-    const tipoConLocal = `${tipo}_${local}`;
-    if (TEMPLATES[tipoConLocal]) {
-      mensaje = TEMPLATES[tipoConLocal](nombre, extra.puntos, extra.nivel);
-    } else if (TEMPLATES[tipo]) {
-      mensaje = TEMPLATES[tipo](nombre, extra.puntos, extra.nivel);
-    } else {
-      mensaje = TEMPLATES['bienvenida'](nombre, extra.puntos, extra.nivel);
-    }
+    // Tipo desconocido → usar bienvenida por defecto
+    templateName = 'bienvenida_cliente';
+    components = [
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: nombre }],
+      },
+    ];
+    mensajeLog = `[plantilla: bienvenida_cliente (fallback)] nombre=${nombre}`;
   }
 
   let estado = 'simulado';
@@ -127,18 +153,19 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
 
   if (!mock) {
     try {
-      const data = await enviarPorMeta(telefonoNorm, mensaje);
+      const data = await enviarPorMetaTemplate(telefonoNorm, templateName, components);
       metaMessageId = data?.messages?.[0]?.id || null;
       estado = 'enviado';
-      console.log(`[WhatsApp META][${local}] → ${telefonoNorm} | ${tipo} | ID: ${metaMessageId}`);
+      console.log(`[WhatsApp META][${local}] → ${telefonoNorm} | plantilla: ${templateName} | ID: ${metaMessageId}`);
     } catch (err) {
       estado = 'fallido';
       console.error(`[WhatsApp META ERROR][${local}] → ${telefonoNorm}:`, err.message);
     }
   } else {
     console.log(`[WhatsApp MOCK][local: ${local}] → ${telefonoNorm}`);
-    console.log(`  Tipo:  ${tipo}`);
-    console.log(`  Msg:   ${mensaje}`);
+    console.log(`  Tipo:      ${tipo}`);
+    console.log(`  Plantilla: ${templateName}`);
+    console.log(`  Log:       ${mensajeLog}`);
   }
 
   // Guardar log en base de datos
@@ -146,13 +173,13 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
     await pool.query(
       `INSERT INTO mensajes_whatsapp (cliente_id, telefono, tipo, mensaje, estado, twilio_sid, local_origen)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [clienteId || null, telefonoNorm, tipo, mensaje, estado, metaMessageId, local]
+      [clienteId || null, telefonoNorm, tipo, mensajeLog, estado, metaMessageId, local]
     );
   } catch (dbErr) {
     console.error('[WhatsApp] Error al guardar log:', dbErr.message);
   }
 
-  return { estado, mensaje };
+  return { estado, mensaje: mensajeLog };
 }
 
 // ─── Envío masivo a un segmento ──────────────────────────────
@@ -200,4 +227,4 @@ async function enviarCampana({ campanaId, nombre, mensaje, segmento, local = 'to
   return { enviados };
 }
 
-module.exports = { enviarWhatsApp, enviarCampana, TEMPLATES, normalizarTelefono };
+module.exports = { enviarWhatsApp, enviarCampana, normalizarTelefono };
