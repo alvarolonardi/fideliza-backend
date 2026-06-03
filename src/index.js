@@ -16,7 +16,9 @@ app.use('/api/dashboard',  require('./routes/dashboard'));
 app.use('/api/campanas',   require('./routes/campanas'));
 app.use('/api/qr',         require('./routes/qr'));
 app.use('/webhooks/tiendanube', require('./webhooks/tiendanube'));
-app.use('/webhooks/twilio', require('./webhooks/twilio'));
+app.use('/webhooks/twilio',     require('./webhooks/twilio'));
+app.use('/webhooks/meta',       require('./webhooks/webhook-meta'));
+
 // Endpoint para ver mensajes mock en tiempo real
 app.get('/api/mensajes-log', require('./middleware/auth'), async (req, res) => {
   const db = require('../config/db');
@@ -34,12 +36,11 @@ const PORT = process.env.PORT || 3001;
 
 async function start() {
   try {
-    // Auto-init schema al arrancar (crea las tablas si no existen)
     await initSchema();
     app.listen(PORT, () => {
       console.log(`\n🚀 Fideliza API → http://localhost:${PORT}`);
       console.log(`   DB:        ${require('../config/db')._type}`);
-      console.log(`   WhatsApp:  ${process.env.WHATSAPP_MOCK !== 'false' ? 'MOCK (consola)' : 'Twilio real'}`);
+      console.log(`   WhatsApp:  ${process.env.WHATSAPP_MOCK !== 'false' ? 'MOCK (consola)' : 'Meta Cloud API'}`);
       console.log(`   Frontend:  ${process.env.FRONTEND_URL || 'http://localhost:3000'}\n`);
     });
 
