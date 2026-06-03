@@ -83,15 +83,15 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
   let mensajeLog; // solo para el log en base de datos
 
   if (tipo === 'bienvenida' || tipo === 'bienvenida_mujer' || tipo === 'bienvenida_hombre') {
-    // Plantilla: bienvenida_cliente → variable {{1}} = nombre
-    templateName = 'bienvenida_cliente';
+    // Plantilla: bienvenida_fideliza → variable {{1}} = nombre
+    templateName = 'bienvenida_fideliza';
     components = [
       {
         type: 'body',
         parameters: [{ type: 'text', text: nombre }],
       },
     ];
-    mensajeLog = `[plantilla: bienvenida_cliente] nombre=${nombre}`;
+    mensajeLog = `[plantilla: bienvenida_fideliza] nombre=${nombre}`;
 
   } else if (tipo === 'cumpleanos') {
     // Plantilla: cumpleanos_cliente → variable {{1}} = nombre
@@ -138,14 +138,14 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
 
   } else {
     // Tipo desconocido → usar bienvenida por defecto
-    templateName = 'bienvenida_cliente';
+    templateName = 'bienvenida_fideliza';
     components = [
       {
         type: 'body',
         parameters: [{ type: 'text', text: nombre }],
       },
     ];
-    mensajeLog = `[plantilla: bienvenida_cliente (fallback)] nombre=${nombre}`;
+    mensajeLog = `[plantilla: bienvenida_fideliza (fallback)] nombre=${nombre}`;
   }
 
   let estado = 'simulado';
