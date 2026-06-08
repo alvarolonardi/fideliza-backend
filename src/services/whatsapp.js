@@ -95,20 +95,20 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
 
   } else if (tipo === 'cumpleanos') {
     // Plantilla: cumpleanos_cliente → variable {{1}} = nombre
-    templateName = 'cumpleanos_cliente';
+    templateName = 'cumpleanos_fideliza';
     components = [
       {
         type: 'body',
         parameters: [{ type: 'text', text: nombre }],
       },
     ];
-    mensajeLog = `[plantilla: cumpleanos_cliente] nombre=${nombre}`;
+    mensajeLog = `[plantilla: cumpleanos_fideliza] nombre=${nombre}`;
 
   } else if (tipo === 'puntos') {
     // Plantilla: puntos_cliente → {{1}}=nombre, {{2}}=puntos nuevos, {{3}}=total
     const puntosNuevos = String(extra.puntosNuevos || extra.puntos || '0');
     const puntosTotal  = String(extra.puntos || '0');
-    templateName = 'puntos_cliente';
+    templateName = 'puntos_fideliza';
     components = [
       {
         type: 'body',
@@ -119,12 +119,12 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
         ],
       },
     ];
-    mensajeLog = `[plantilla: puntos_cliente] nombre=${nombre} puntosNuevos=${puntosNuevos} total=${puntosTotal}`;
+    mensajeLog = `[plantilla: puntos_fideliza] nombre=${nombre} puntosNuevos=${puntosNuevos} total=${puntosTotal}`;
 
   } else if (tipo === 'campaña' || tipo === 'campana') {
     // Plantilla: campana_cliente → {{1}}=nombre, {{2}}=mensaje de campaña
     const mensajeCampana = extra.mensajePersonalizado || '';
-    templateName = 'campana_cliente';
+    templateName = 'campana_fideliza';
     components = [
       {
         type: 'body',
@@ -134,7 +134,7 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
         ],
       },
     ];
-    mensajeLog = `[plantilla: campana_cliente] nombre=${nombre} mensaje=${mensajeCampana}`;
+    mensajeLog = `[plantilla: campana_fideliza] nombre=${nombre} mensaje=${mensajeCampana}`;
 
   } else {
     // Tipo desconocido → usar bienvenida por defecto
