@@ -44,18 +44,25 @@ router.post('/whatsapp', async (req, res) => {
     if (!messages || messages.length === 0) return;
 
     const message  = messages[0];
-    const telefono = '+' + message.from;
     const texto    = (message.text?.body || '').toLowerCase().trim();
 
-    console.log(`[Webhook Meta] Mensaje de ${telefono}: "${message.text?.body}"`);
+    // Meta envía el número como "5493446559916" (con código de país 54 y 9 de celular AR)
+    // Los clientes se registran sin el +549, ej: "3446559916" (10 dígitos)
+    // Normalizamos extrayendo los últimos 10 dígitos para que coincida con la DB
+    const rawFrom     = message.from; // ej: "5493446559916"
+    const telefonoMeta = '+' + rawFrom; // para logs
+    const telefonoDB   = rawFrom.slice(-10); // ej: "3446559916"
 
-    // Buscar si el cliente existe
+    console.log(`[Webhook Meta] Mensaje de ${telefonoMeta}: "${message.text?.body}"`);
+    console.log(`[Webhook Meta] Buscando en DB con: ${telefonoDB}`);
+
+    // Buscar si el cliente existe usando el formato de la DB (10 dígitos)
     const { rows: [cliente] } = await pool.query(
-      'SELECT * FROM clientes WHERE telefono = $1', [telefono]
+      'SELECT * FROM clientes WHERE telefono = $1', [telefonoDB]
     );
 
     if (!cliente) {
-      console.log(`[Webhook Meta] Cliente no encontrado: ${telefono}`);
+      console.log(`[Webhook Meta] Cliente no encontrado: ${telefonoDB}`);
       return;
     }
 
@@ -70,7 +77,7 @@ router.post('/whatsapp', async (req, res) => {
     );
 
     if (yaEnviado) {
-      console.log(`[Webhook Meta] Bienvenida ya enviada recientemente a ${telefono}`);
+      console.log(`[Webhook Meta] Bienvenida ya enviada recientemente a ${telefonoMeta}`);
       return;
     }
 
