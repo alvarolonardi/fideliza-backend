@@ -37,7 +37,6 @@ async function enviarPorMetaTemplate(telefonoNorm, templateName, components) {
     throw new Error('Faltan variables META_PHONE_NUMBER_ID o META_ACCESS_TOKEN en Railway');
   }
 
-  // Quitar el "+" para Meta (espera formato internacional sin +)
   const telefonoMeta = telefonoNorm.replace('+', '');
 
   const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
@@ -77,35 +76,25 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
   const mock = process.env.WHATSAPP_MOCK !== 'false';
   const telefonoNorm = normalizarTelefono(telefono);
 
-  // Determinar qué plantilla usar y sus parámetros
   let templateName;
   let components;
-  let mensajeLog; // solo para el log en base de datos
+  let mensajeLog;
 
   if (tipo === 'bienvenida' || tipo === 'bienvenida_mujer' || tipo === 'bienvenida_hombre') {
-    // Plantilla: bienvenida_fideliza → variable {{1}} = nombre
     templateName = 'bienvenida_fideliza';
     components = [
-      {
-        type: 'body',
-        parameters: [{ type: 'text', text: nombre }],
-      },
+      { type: 'body', parameters: [{ type: 'text', text: nombre }] },
     ];
     mensajeLog = `[plantilla: bienvenida_fideliza] nombre=${nombre}`;
 
   } else if (tipo === 'cumpleanos') {
-    // Plantilla: cumpleanos_cliente → variable {{1}} = nombre
     templateName = 'cumpleanos_fideliza';
     components = [
-      {
-        type: 'body',
-        parameters: [{ type: 'text', text: nombre }],
-      },
+      { type: 'body', parameters: [{ type: 'text', text: nombre }] },
     ];
     mensajeLog = `[plantilla: cumpleanos_fideliza] nombre=${nombre}`;
 
   } else if (tipo === 'puntos') {
-    // Plantilla: puntos_cliente → {{1}}=nombre, {{2}}=puntos nuevos, {{3}}=total
     const puntosNuevos = String(extra.puntosNuevos || extra.puntos || '0');
     const puntosTotal  = String(extra.puntos || '0');
     templateName = 'puntos_fideliza';
@@ -122,7 +111,6 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
     mensajeLog = `[plantilla: puntos_fideliza] nombre=${nombre} puntosNuevos=${puntosNuevos} total=${puntosTotal}`;
 
   } else if (tipo === 'campaña' || tipo === 'campana') {
-    // Plantilla: campana_cliente → {{1}}=nombre, {{2}}=mensaje de campaña
     const mensajeCampana = extra.mensajePersonalizado || '';
     templateName = 'campana_fideliza';
     components = [
@@ -136,14 +124,51 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
     ];
     mensajeLog = `[plantilla: campana_fideliza] nombre=${nombre} mensaje=${mensajeCampana}`;
 
+  } else if (tipo === 'post_compra') {
+    templateName = 'campana_fideliza';
+    const msg = '¡Gracias por tu compra! Esperamos que lo disfrutes 🛍️';
+    components = [
+      { type: 'body', parameters: [{ type: 'text', text: nombre }, { type: 'text', text: msg }] },
+    ];
+    mensajeLog = `[plantilla: campana_fideliza / post_compra] nombre=${nombre}`;
+
+  } else if (tipo === 'cross_sell') {
+    templateName = 'campana_fideliza';
+    const msg = 'Tenemos novedades que te van a encantar. ¡Pasá a visitarnos!';
+    components = [
+      { type: 'body', parameters: [{ type: 'text', text: nombre }, { type: 'text', text: msg }] },
+    ];
+    mensajeLog = `[plantilla: campana_fideliza / cross_sell] nombre=${nombre}`;
+
+  } else if (tipo === 'reactivacion') {
+    templateName = 'campana_fideliza';
+    const msg = '¡Te extrañamos! Hace tiempo que no te vemos por Casa Sierra 🌟';
+    components = [
+      { type: 'body', parameters: [{ type: 'text', text: nombre }, { type: 'text', text: msg }] },
+    ];
+    mensajeLog = `[plantilla: campana_fideliza / reactivacion] nombre=${nombre}`;
+
+  } else if (tipo === 'vip') {
+    templateName = 'campana_fideliza';
+    const msg = 'Como cliente VIP tenés acceso a ofertas exclusivas esta semana ✨';
+    components = [
+      { type: 'body', parameters: [{ type: 'text', text: nombre }, { type: 'text', text: msg }] },
+    ];
+    mensajeLog = `[plantilla: campana_fideliza / vip] nombre=${nombre}`;
+
+  } else if (tipo === 'personal_shopper') {
+    templateName = 'campana_fideliza';
+    const msg = 'Tu personal shopper de Casa Sierra está disponible para ayudarte 👗';
+    components = [
+      { type: 'body', parameters: [{ type: 'text', text: nombre }, { type: 'text', text: msg }] },
+    ];
+    mensajeLog = `[plantilla: campana_fideliza / personal_shopper] nombre=${nombre}`;
+
   } else {
     // Tipo desconocido → usar bienvenida por defecto
     templateName = 'bienvenida_fideliza';
     components = [
-      {
-        type: 'body',
-        parameters: [{ type: 'text', text: nombre }],
-      },
+      { type: 'body', parameters: [{ type: 'text', text: nombre }] },
     ];
     mensajeLog = `[plantilla: bienvenida_fideliza (fallback)] nombre=${nombre}`;
   }
@@ -188,15 +213,12 @@ async function enviarCampana({ campanaId, nombre, mensaje, segmento, local = 'to
   const params = [];
   let idx = 1;
 
-  // Filtro por segmento
   if (segmento === 'vip')            { where.push(`(segmento = $${idx} OR es_vip = 1)`); params.push('vip'); idx++; }
   else if (segmento === 'inactivos') { where.push(`segmento = $${idx}`); params.push('inactivo'); idx++; }
   else if (segmento !== 'todos')     { where.push(`segmento = $${idx}`); params.push(segmento); idx++; }
 
-  // Filtro por local
   if (local === 'mujer')       { where.push(`local = $${idx}`); params.push('mujer'); idx++; }
   else if (local === 'hombre') { where.push(`local = $${idx}`); params.push('hombre'); idx++; }
-  // 'todos' → no agrega filtro
 
   const whereSQL = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const { rows: clientes } = await pool.query(
