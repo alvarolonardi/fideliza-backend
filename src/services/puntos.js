@@ -6,29 +6,29 @@
 const pool = require('../../config/db');
 
 // ─── Reglas de puntos ────────────────────────────────────────
-// 1 punto por cada $100 gastados (ajustar según moneda/negocio)
+// 1 punto por cada $1000 gastados
 const PUNTOS_POR_100 = 1;
 
 // Umbrales de nivel
 const NIVELES = {
-  bronce: { min: 0,    max: 499  },
-  plata:  { min: 500,  max: 1999 },
-  oro:    { min: 2000, max: 5999 },
-  vip:    { min: 6000, max: Infinity },
+  bronce: { min: 0,    max: 299  },
+  plata:  { min: 300,  max: 999  },
+  oro:    { min: 1000, max: 2999 },
+  vip:    { min: 3000, max: Infinity },
 };
 
 // Tabla de recompensas disponibles
 const RECOMPENSAS = [
-  { id: 'descuento_10', nombre: 'Descuento 10%',    puntos: 300,  tipo: 'descuento' },
-  { id: 'descuento_15', nombre: 'Descuento 15%',    puntos: 500,  tipo: 'descuento' },
-  { id: 'envio_gratis', nombre: 'Envío gratis',      puntos: 200,  tipo: 'envio'     },
-  { id: 'packaging_vip', nombre: 'Packaging premium', puntos: 150, tipo: 'regalo'    },
-  { id: 'preventa',     nombre: 'Acceso preventa',   puntos: 0,    tipo: 'exclusivo', nivel_min: 'vip' },
+  { id: 'packaging_vip', nombre: 'Packaging premium', puntos: 200,  tipo: 'regalo'    },
+  { id: 'descuento_10',  nombre: 'Descuento 10%',     puntos: 400,  tipo: 'descuento' },
+  { id: 'descuento_15',  nombre: 'Descuento 15%',     puntos: 700,  tipo: 'descuento' },
+  { id: 'descuento_20',  nombre: 'Descuento 20%',     puntos: 1000, tipo: 'descuento' },
+  { id: 'preventa',      nombre: 'Acceso preventa',   puntos: 0,    tipo: 'exclusivo', nivel_min: 'vip' },
 ];
 
 // ─── Calcular puntos de una compra ──────────────────────────
 function calcularPuntos(monto) {
-  return Math.floor(monto / 100) * PUNTOS_POR_100;
+  return Math.floor(monto / 1000) * PUNTOS_POR_100;
 }
 
 // ─── Calcular nivel según puntos ────────────────────────────
