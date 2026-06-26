@@ -64,6 +64,32 @@ async function enviarWhatsApp({ clienteId, telefono, tipo, nombre, local = 'muje
     components = [{ type: 'body', parameters: [{ type: 'text', text: nombre }] }];
     mensajeLog = `[plantilla: puntos500_fideliza] nombre=${nombre}`;
 
+  } else if (tipo === 'canje') {
+    templateName = 'canje_fideliza';
+    const puntosCanjeados = String(extra.puntosCanjeados || '0');
+    const credito = String(extra.credito || '0');
+    components = [
+      { type: 'body', parameters: [
+        { type: 'text', text: nombre },
+        { type: 'text', text: puntosCanjeados },
+        { type: 'text', text: credito },
+      ]},
+    ];
+    mensajeLog = `[plantilla: canje_fideliza] nombre=${nombre} puntos=${puntosCanjeados} credito=${credito}`;
+
+  } else if (tipo === 'canje') {
+    templateName = 'canje_fideliza';
+    const puntosCanjeados = String(extra.puntosCanjeados || '0');
+    const credito = String(extra.credito || '0');
+    components = [
+      { type: 'body', parameters: [
+        { type: 'text', text: nombre },
+        { type: 'text', text: puntosCanjeados },
+        { type: 'text', text: credito },
+      ]},
+    ];
+    mensajeLog = `[plantilla: canje_fideliza] nombre=${nombre} puntos=${puntosCanjeados} credito=${credito}`;
+
   } else if (tipo === 'puntos1000') {
     templateName = 'puntos1000_fideliza';
     components = [{ type: 'body', parameters: [{ type: 'text', text: nombre }] }];
