@@ -235,6 +235,44 @@ router.post('/:id/canje', async (req, res) => {
 
 module.exports = router;
 
+// ─── POST /clientes/:id/canje-puntos ─────────────────────────
+router.post('/:id/canje-puntos', auth, async (req, res) => {
+  try {
+    const { puntos } = req.body;
+    const puntosNum = parseInt(puntos);
+
+    if (!puntosNum || puntosNum < 500) {
+      return res.status(400).json({ error: 'El mínimo para canjear es 500 puntos.' });
+    }
+    if (puntosNum % 500 !== 0) {
+      return res.status(400).json({ error: 'Solo podés canjear múltiplos de 500 puntos.' });
+    }
+
+    const { rows: [cliente] } = await pool.query('SELECT * FROM clientes WHERE id = $1', [req.params.id]);
+    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (cliente.puntos < puntosNum) {
+      return res.status(400).json({ error: `El cliente solo tiene ${cliente.puntos} puntos disponibles.` });
+    }
+
+    const credito = puntosNum * 100;
+
+    // Descontar puntos
+    await pool.query('UPDATE clientes SET puntos = puntos - $1 WHERE id = $2', [puntosNum, req.params.id]);
+
+    // Registrar el canje
+    await pool.query(
+      `INSERT INTO canjes (cliente_id, tipo, descripcion, puntos_usados, codigo)
+       VALUES ($1, 'credito', $2, $3, $4)`,
+      [req.params.id, `Canje de ${puntosNum} puntos por $${credito.toLocaleString('es-AR')} en crédito`, puntosNum, `CANJE-${Date.now()}`]
+    );
+
+    console.log(`[Canje] Cliente ${cliente.nombre} canjeó ${puntosNum} puntos por $${credito}`);
+    res.json({ ok: true, puntosCanjeados: puntosNum, credito });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DELETE /clientes/:id ───────────────────────────────────
 router.delete('/:id', auth, async (req, res) => {
   try {
