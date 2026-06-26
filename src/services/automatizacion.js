@@ -81,6 +81,30 @@ async function triggerCumpleanos() {
   }
 }
 
+// ─── Trigger: hitos de puntos (500 y 1000) ──────────────────
+async function triggerHitoPuntos(clienteId, telefono, nombre, local = 'mujer', puntosActuales, puntosAnteriores) {
+  // Cruzó los 500 puntos
+  if (puntosAnteriores < 500 && puntosActuales >= 500 && puntosActuales < 1000) {
+    const yaEnviado = await pool.query(
+      `SELECT id FROM mensajes_whatsapp WHERE cliente_id = $1 AND tipo = 'puntos500' AND creado_en > NOW() - INTERVAL '30 days'`,
+      [clienteId]
+    );
+    if (!yaEnviado.rows.length) {
+      await enviarWhatsApp({ clienteId, telefono, tipo: 'puntos500', nombre, local });
+    }
+  }
+  // Cruzó los 1000 puntos
+  if (puntosAnteriores < 1000 && puntosActuales >= 1000) {
+    const yaEnviado = await pool.query(
+      `SELECT id FROM mensajes_whatsapp WHERE cliente_id = $1 AND tipo = 'puntos1000' AND creado_en > NOW() - INTERVAL '30 days'`,
+      [clienteId]
+    );
+    if (!yaEnviado.rows.length) {
+      await enviarWhatsApp({ clienteId, telefono, tipo: 'puntos1000', nombre, local });
+    }
+  }
+}
+
 // ─── Trigger manual: post-compra inmediato ───────────────────
 async function triggerPostCompra(clienteId, telefono, nombre, local = 'mujer') {
   await enviarWhatsApp({ clienteId, telefono, tipo: 'post_compra', nombre, local });
@@ -116,4 +140,5 @@ module.exports = {
   triggerCrossSell3Dias,
   triggerReactivacion,
   triggerCumpleanos,
+  triggerHitoPuntos,
 };

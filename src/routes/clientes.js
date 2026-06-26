@@ -3,7 +3,7 @@ const router  = express.Router();
 const pool    = require('../../config/db');
 const auth    = require('../middleware/auth');
 const { registrarCompra, RECOMPENSAS } = require('../services/puntos');
-const { triggerPostCompra, triggerVIP } = require('../services/automatizacion');
+const { triggerPostCompra, triggerVIP, triggerHitoPuntos } = require('../services/automatizacion');
 const { enviarWhatsApp } = require('../services/whatsapp');
 const { v4: uuidv4 } = require('uuid');
 
@@ -152,8 +152,12 @@ router.post('/:id/compra', auth, async (req, res) => {
     });
 
     // Trigger post-compra inmediato
-    const { rows: [c] } = await pool.query('SELECT nombre, telefono FROM clientes WHERE id=$1', [req.params.id]);
+    const { rows: [c] } = await pool.query('SELECT nombre, telefono, local, puntos FROM clientes WHERE id=$1', [req.params.id]);
     await triggerPostCompra(req.params.id, c.telefono, c.nombre);
+
+    // Trigger hitos de puntos
+    const puntosAnteriores = c.puntos - resultado.puntosGanados;
+    await triggerHitoPuntos(req.params.id, c.telefono, c.nombre, c.local || 'mujer', c.puntos, puntosAnteriores);
 
     // Si subió a VIP
     if (resultado.nivel === 'vip') {
